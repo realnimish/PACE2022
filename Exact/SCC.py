@@ -39,6 +39,15 @@ class Graph:
 		for node in self.graph:
 			self.graph[node].difference_update(nodes)
 
+	def remove_sink_nodes(self):
+		while True:
+			sink_nodes = set()
+			for node in self.graph:
+				if len(self.graph[node])==0:
+					sink_nodes.add(node)
+			if not sink_nodes: break
+			self.remove_nodes(sink_nodes)
+
 	# @param nodes: set(nodes)
 	def get_induced_subgraph(self,nodes):
 	    G = Graph(len(nodes),None)
@@ -116,12 +125,44 @@ class Graph:
 		return scc
 
 	def get_FVS(self):
-		nodes = self.graph.keys()
-		for sz in range(self.N):
+		def find_fvs(nodes,sz):
 			for rem_nodes in combinations(nodes,sz):
 				rem_nodes = set(rem_nodes)
 				if self.is_FVS(rem_nodes):
-					return rem_nodes		
+					return rem_nodes
+			return None
+		
+		# if not self.is_DAG(): return set()
+		nodes = self.graph.keys()
+		
+		lo,hi = 0,len(nodes)-1
+		sol = None
+
+		while lo<hi:
+			mid1 = lo + (hi-lo)//3
+			mid2 = hi - (hi-lo)//3
+
+			# Solve left
+			fvs1 = find_fvs(nodes,mid1)
+
+			if fvs1 != None:
+				sol = fvs1
+				hi = mid1-1  # No need to check mid2 now
+				continue
+			else:
+				lo = mid1+1
+
+			# Solve right
+			fvs2 = find_fvs(nodes,mid2)
+
+			if fvs2 != None:
+				sol = fvs2
+				hi = mid2-1
+			else:
+				lo = mid2+1  # No need to check mid1 now
+
+		return find_fvs(nodes,lo) if lo==hi else sol
+					
 
 def read_graph(): # Main Graph (nodes := 1,2,3,....)
 	def read_data():
