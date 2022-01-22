@@ -131,6 +131,9 @@ class Graph:
 				if self.is_FVS(rem_nodes):
 					return rem_nodes
 			return None
+
+		def decide_side():
+			return "LEFT"
 		
 		# if not self.is_DAG(): return set()
 		nodes = self.graph.keys()
@@ -142,24 +145,33 @@ class Graph:
 			mid1 = lo + (hi-lo)//3
 			mid2 = hi - (hi-lo)//3
 
-			# Solve left
-			fvs1 = find_fvs(nodes,mid1)
+			if decide_side() == "LEFT":
+				# Solve left
+				fvs1 = find_fvs(nodes,mid1)
+				if fvs1 != None:
+					sol,hi = fvs1, mid1-1
+					continue
+				else: lo = mid1+1
 
-			if fvs1 != None:
-				sol = fvs1
-				hi = mid1-1  # No need to check mid2 now
-				continue
+				# Solve right
+				fvs2 = find_fvs(nodes,mid2)
+				if fvs2 != None:
+					sol,hi = fvs2, mid2-1
+				else: lo = mid2+1
 			else:
-				lo = mid1+1
+				# Solve right
+				fvs2 = find_fvs(nodes,mid2)
+				if fvs2 != None:
+					sol,hi = fvs2, mid2-1
+				else: 
+					lo = mid2+1
+					continue
 
-			# Solve right
-			fvs2 = find_fvs(nodes,mid2)
-
-			if fvs2 != None:
-				sol = fvs2
-				hi = mid2-1
-			else:
-				lo = mid2+1  # No need to check mid1 now
+				# Solve left
+				fvs1 = find_fvs(nodes,mid1)
+				if fvs1 != None:
+					sol,hi = fvs1, mid1-1
+				else: lo = mid1+1
 
 		return find_fvs(nodes,lo) if lo==hi else sol
 					
