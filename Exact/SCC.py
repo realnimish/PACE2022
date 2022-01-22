@@ -134,6 +134,14 @@ class Graph:
 
 		def decide_side():
 			return "LEFT"
+
+		def solve_side(lo,hi,mid):
+			fvs = find_fvs(nodes,mid)
+			if fvs != None:
+				sol,hi = fvs, mid-1
+			else: 
+				lo = mid+1
+			return lo,hi,fvs
 		
 		# if not self.is_DAG(): return set()
 		nodes = self.graph.keys()
@@ -146,32 +154,16 @@ class Graph:
 			mid2 = hi - (hi-lo)//3
 
 			if decide_side() == "LEFT":
-				# Solve left
-				fvs1 = find_fvs(nodes,mid1)
-				if fvs1 != None:
-					sol,hi = fvs1, mid1-1
-					continue
-				else: lo = mid1+1
-
-				# Solve right
-				fvs2 = find_fvs(nodes,mid2)
-				if fvs2 != None:
-					sol,hi = fvs2, mid2-1
-				else: lo = mid2+1
+				lo,hi,fvs = solve_side(lo,hi,mid1)
+				if fvs == None:	# Solution doesn't exist
+					lo,hi,fvs = solve_side(lo,hi,mid2)
 			else:
-				# Solve right
-				fvs2 = find_fvs(nodes,mid2)
-				if fvs2 != None:
-					sol,hi = fvs2, mid2-1
-				else: 
-					lo = mid2+1
-					continue
+				lo,hi,fvs = solve_side(lo,hi,mid2)
+				if fvs != None:	# Solution exists
+					sol = fvs
+					lo,hi,fvs = solve_side(lo,hi,mid1)
 
-				# Solve left
-				fvs1 = find_fvs(nodes,mid1)
-				if fvs1 != None:
-					sol,hi = fvs1, mid1-1
-				else: lo = mid1+1
+			if fvs != None: sol = fvs
 
 		return find_fvs(nodes,lo) if lo==hi else sol
 					
