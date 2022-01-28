@@ -1,24 +1,9 @@
-"""
-Let u<->v denote they both are reachable from the other.
-Let u</>v denote both are not reachable from the other.
-
-Lemma 1) if u</>v then they are independent from each other i.e. removing
-one won't affect the cyclicity of the other node.
-
-Lemma 2) u<->v && v<->w => u<->w (Strongly Connected Component)
-
-So from Lemma 1&2, We can divide the nodes into MECE SCCs subsets.
-And for each subset, We get its induced subgraph and solve them independently!
-
-Improvement over brute_force ->
-
-brute_force = O*(2^n)
-this = O*(2^s1 + 2^s2 + ... + 2^sx) where s1+s2+..+sx = n
-"""
-
+from random import random
 from collections import defaultdict as ddict
 from itertools import combinations
 
+from sys import setrecursionlimit as srl 
+srl(10**5)
 
 class Graph:
     def __init__(self, N, M):
@@ -140,49 +125,70 @@ class Graph:
         return scc
 
     def get_FVS(self):
-        def find_fvs(nodes, sz):
-            for rem_nodes in combinations(nodes, sz):
-                rem_nodes = set(rem_nodes)
-                if self.is_FVS(rem_nodes):
-                    return rem_nodes
-            return None
+        scc = self.get_SCC()
+        fvs = set()
 
-        def decide_side():
-            return "LEFT"
+        for _set in scc:
+            if len(_set) < 2: 
+                continue
 
-        def solve_side(lo, hi, mid):
-            fvs = find_fvs(nodes, mid)
-            if fvs != None:
-                hi = mid - 1
-            else:
-                lo = mid + 1
-            return lo, hi, fvs
+            subgraph = self.get_induced_subgraph(_set)
+            critical_nodes = subgraph.get_critical_nodes()
+            fvs |= critical_nodes
+            subgraph.remove_nodes(critical_nodes)
+            fvs |= subgraph.get_FVS()
+        return fvs
 
-        # if not self.is_DAG(): return set()
-        nodes = self.graph.keys()
+    def get_critical_nodes(self):
+        if self.is_DAG(): return set()
 
-        lo, hi = 0, len(nodes) - 1
-        sol = None
+        pr = self.pagerank()
+        critical = None 
 
-        while lo < hi:
-            mid1 = lo + (hi - lo) // 3
-            mid2 = hi - (hi - lo) // 3
+        for node in pr:
+            if critical is None:
+                critical = node
+            elif pr[node] > pr[critical]:
+                critical = node 
+        return {critical,}
 
-            if decide_side() == "LEFT":
-                lo, hi, fvs = solve_side(lo, hi, mid1)
-                if fvs == None:  # Solution doesn't exist
-                    lo, hi, fvs = solve_side(lo, hi, mid2)
-            else:
-                lo, hi, fvs = solve_side(lo, hi, mid2)
-                if fvs != None:  # Solution exists
-                    sol = fvs
-                    lo, hi, fvs = solve_side(lo, hi, mid1)
+    def pagerank(self, beta=0.85, epsilon=1e-6, itr=100, rand=False):
+        """
+        beta - damping factor
+        itr - no. of iterations
+        epsilon - to check for convergence
+        rand - randomly initialize the probability of each node
+        Time Complexity - O(itr*(V + E)) (if there are no sink nodes in Graph)
+        """
+        N = len(self.graph)
+        curr = {}
 
-            if fvs != None:
-                sol = fvs
+        # uniform probability distribution
+        if not rand:
+            curr = {node: 1 / N for node in self.graph}
+        else:
+            curr = {node: random() for node in self.graph}
+            sm = sum(curr.values())
+            curr = {k: v / sm for k, v in curr.items()}  # normalize the vector
 
-        return find_fvs(nodes, lo) if lo == hi else sol
+        for _ in range(itr):
 
+            # initialize the next distribution with (1-beta)/n to prevent spider trap
+            nxt = {node: (1 - beta) / N for node in self.graph}
+
+            for node in self.graph:
+                for ch in self.graph[node]:
+                    nxt[ch] += beta * (curr[node] / len(self.graph[node]))
+
+                # Distribute value of sink nodes among all other nodes
+                if len(self.graph[node]) == 0:
+                    for x in self.graph:
+                        nxt[x] += beta * (curr[node] / N)
+            # if converge then return
+            if all(abs(curr[node] - nxt[node]) < epsilon for node in self.graph):
+                return nxt
+            curr = nxt
+        return curr
 
 def read_graph():  # Main Graph (nodes := 1,2,3,....)
     def read_data():
@@ -201,26 +207,17 @@ def read_graph():  # Main Graph (nodes := 1,2,3,....)
             G.add_edge(u, v)
     return G
 
-
-def find_solution(G):
-    scc = G.get_SCC()
-    sol = set()
-    for _set in scc:
-        if len(_set) < 3:
-            continue
-        sol |= G.get_induced_subgraph(_set).get_FVS()
-    return sol
-
-
-def print_solution(sol, DEBG=True):
+def print_solution(G, sol, DEBG=True):
     if DEBG:
+        print("Is FVS?", G.is_FVS(sol))
         print("Minimum nodes to remove = ", len(sol))
-        print("Removed nodes = ", sol)
+        #print("Removed nodes = ", sol)
     else:
         print("\n".join(map(str, sol)))
 
 
 if __name__ == "__main__":
     G = read_graph()
-    sol = find_solution(G)
-    print_solution(sol, False)
+    sol = G.get_FVS()
+    print_solution(G,sol)
+
