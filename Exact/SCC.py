@@ -188,7 +188,11 @@ class Graph:
             if fvs != None:
                 sol = fvs
 
-        return find_fvs(nodes, lo) if lo == hi else sol
+        if lo == hi:
+            fvs = find_fvs(nodes, lo)
+            if fvs != None:
+                sol = fvs
+        return sol
 
 
 def read_graph():
