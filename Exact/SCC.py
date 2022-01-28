@@ -23,8 +23,8 @@ from itertools import combinations
 class Graph:
     def __init__(self, N, M):
         self.graph = dict()
-        self.N = N
-        self.M = M
+        self.N = N  # Number of Nodes
+        self.M = M  # Number of Edges
 
     def get_all_nodes(self):
         nodes = set()
@@ -60,6 +60,7 @@ class Graph:
             self.remove_nodes(sink_nodes)
 
     # @param nodes: set(nodes)
+    # @returns G: Graph
     def get_induced_subgraph(self, nodes):
         G = Graph(len(nodes), None)
         for node in nodes:
@@ -67,6 +68,7 @@ class Graph:
         G.M = sum(map(len, G.graph.values()))  # counts number of edges
         return G
 
+    # Deepcopy the graph
     def copy(self):
         G = Graph(self.N, self.M)
         for node in self.graph:
@@ -104,6 +106,7 @@ class Graph:
                 G.add_edge(ch, node)
         return G
 
+    # @returns list of set where each set correspond to SCC
     def get_SCC(self):
         def fill(node):
             vis[node] = True
@@ -140,17 +143,21 @@ class Graph:
         return scc
 
     def get_FVS(self):
-        def find_fvs(nodes, sz):
+        def find_fvs(nodes, sz): # Finds FVS of size sz if exists
             for rem_nodes in combinations(nodes, sz):
                 rem_nodes = set(rem_nodes)
                 if self.is_FVS(rem_nodes):
                     return rem_nodes
             return None
 
-        def decide_side():
+        def decide_side():  
+            # Some heuristic to prefer order of eval
+            # of ternary search for general optimisation
             return "LEFT"
 
         def solve_side(lo, hi, mid):
+            # Checks if FVS exists for size=mid
+            # Updates the constraints based on the outcome
             fvs = find_fvs(nodes, mid)
             if fvs != None:
                 hi = mid - 1
@@ -184,8 +191,8 @@ class Graph:
         return find_fvs(nodes, lo) if lo == hi else sol
 
 
-def read_graph():  # Main Graph (nodes := 1,2,3,....)
-    def read_data():
+def read_graph():
+    def read_data(): # Helper function to read the graph based on PACE input format
         is_comment = lambda x: len(x) > 0 and x[0] == "%"
         inp = "%"
         while is_comment(inp):

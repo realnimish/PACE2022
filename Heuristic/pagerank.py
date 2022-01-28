@@ -8,8 +8,8 @@ srl(10**5)
 class Graph:
     def __init__(self, N, M):
         self.graph = dict()
-        self.N = N
-        self.M = M
+        self.N = N  # Number of Nodes
+        self.M = M  # Number of Edges
 
     def get_all_nodes(self):
         nodes = set()
@@ -45,6 +45,7 @@ class Graph:
             self.remove_nodes(sink_nodes)
 
     # @param nodes: set(nodes)
+    # @returns G: Graph
     def get_induced_subgraph(self, nodes):
         G = Graph(len(nodes), None)
         for node in nodes:
@@ -52,6 +53,7 @@ class Graph:
         G.M = sum(map(len, G.graph.values()))  # counts number of edges
         return G
 
+    # Deepcopy the graph
     def copy(self):
         G = Graph(self.N, self.M)
         for node in self.graph:
@@ -89,6 +91,7 @@ class Graph:
                 G.add_edge(ch, node)
         return G
 
+    # @returns list of set where each set correspond to SCC
     def get_SCC(self):
         def fill(node):
             vis[node] = True
@@ -124,6 +127,7 @@ class Graph:
                 scc.append(_set)
         return scc
 
+    # Finds the FVS for the given graph
     def get_FVS(self):
         scc = self.get_SCC()
         fvs = set()
@@ -139,7 +143,13 @@ class Graph:
             fvs |= subgraph.get_FVS()
         return fvs
 
+    # Heuristic to find the set of nodes that should be removed
     def get_critical_nodes(self):
+        """
+            Approach:
+            Select the highest weighted node based on Pagerank algorithm
+        """
+                    
         if self.is_DAG(): return set()
 
         pr = self.pagerank()
@@ -190,8 +200,8 @@ class Graph:
             curr = nxt
         return curr
 
-def read_graph():  # Main Graph (nodes := 1,2,3,....)
-    def read_data():
+def read_graph():
+    def read_data():    # Helper function to read the graph based on PACE input format
         is_comment = lambda x: len(x) > 0 and x[0] == "%"
         inp = "%"
         while is_comment(inp):
