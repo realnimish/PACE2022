@@ -29,10 +29,16 @@ class Graph:
     # @param nodes -> set(nodes)
     def remove_nodes(self, nodes):
         for node in nodes:
-            self.graph.pop(node, None)
+            nei = self.graph.pop(node, None)
+            if nei is not None:
+                self.N -= 1
+                self.M -= len(nei)
 
         for node in self.graph:
+            sz1 = len(self.graph[node])
             self.graph[node].difference_update(nodes)
+            sz2 = len(self.graph[node])
+            self.M -= (sz1 - sz2)
 
     def remove_sink_nodes(self):
         while True:
@@ -126,6 +132,71 @@ class Graph:
                 dfs(node, _set)
                 scc.append(_set)
         return scc
+ 
+    # Uses ../Exact/SCC solution
+    def get_FVS_Exact(self):
+        def find_fvs(nodes, sz): # Finds FVS of size sz if exists
+            for rem_nodes in combinations(nodes, sz):
+                rem_nodes = set(rem_nodes)
+                if self.is_FVS(rem_nodes):
+                    return rem_nodes
+            return None
+
+        def decide_side():  
+            # Some heuristic to prefer order of eval
+            # of ternary search for general optimisation
+            return "LEFT"
+
+        def solve_side(lo, hi, mid):
+            # Checks if FVS exists for size=mid
+            # Updates the constraints based on the outcome
+            fvs = find_fvs(nodes, mid)
+            if fvs != None:
+                hi = mid - 1
+            else:
+                lo = mid + 1
+            return lo, hi, fvs
+
+        # if not self.is_DAG(): return set()
+        nodes = self.graph.keys()
+
+        lo, hi = 0, len(nodes) - 1
+        sol = None
+
+        while lo < hi:
+            mid1 = lo + (hi - lo) // 3
+            mid2 = hi - (hi - lo) // 3
+
+            if decide_side() == "LEFT":
+                lo, hi, fvs = solve_side(lo, hi, mid1)
+                if fvs == None:  # Solution doesn't exist
+                    lo, hi, fvs = solve_side(lo, hi, mid2)
+            else:
+                lo, hi, fvs = solve_side(lo, hi, mid2)
+                if fvs != None:  # Solution exists
+                    sol = fvs
+                    lo, hi, fvs = solve_side(lo, hi, mid1)
+
+            if fvs != None:
+                sol = fvs
+
+        if lo == hi:
+            fvs = find_fvs(nodes, lo)
+            if fvs != None:
+                sol = fvs
+        return sol
+
+    def get_FVS_Heuristic(self):
+        critical_nodes = self.get_critical_nodes()
+        self.remove_nodes(critical_nodes)
+        return critical_nodes | self.get_FVS()
+
+    # Heurisitic to determine the method to find FVS for self
+    def decide_approach(self):
+        if self.N < 10 or self.M <= 3*self.N:
+            return "Exact"
+        else:
+            return "Heuristic"
 
     # Finds the FVS for the given graph
     def get_FVS(self):
@@ -137,10 +208,10 @@ class Graph:
                 continue
 
             subgraph = self.get_induced_subgraph(_set)
-            critical_nodes = subgraph.get_critical_nodes()
-            fvs |= critical_nodes
-            subgraph.remove_nodes(critical_nodes)
-            fvs |= subgraph.get_FVS()
+            if subgraph.decide_approach() == "Exact":
+                fvs |= subgraph.get_FVS_Exact()
+            else:
+                fvs |= subgraph.get_FVS_Heuristic()
         return fvs
 
     # Heuristic to find the set of nodes that should be removed
