@@ -3,7 +3,7 @@ from collections import defaultdict as ddict
 from itertools import combinations
 
 from sys import setrecursionlimit as srl 
-srl(10**5)
+srl(10**7)
 
 class Graph:
     def __init__(self, N, M):
@@ -134,7 +134,7 @@ class Graph:
         return scc
  
     # Uses ../Exact/SCC solution
-    def get_FVS_Exact(self):
+    def get_FVS_Exact(self, method = "linear"):
         def find_fvs(nodes, sz): # Finds FVS of size sz if exists
             for rem_nodes in combinations(nodes, sz):
                 rem_nodes = set(rem_nodes)
@@ -142,49 +142,63 @@ class Graph:
                     return rem_nodes
             return None
 
-        def decide_side():  
-            # Some heuristic to prefer order of eval
-            # of ternary search for general optimisation
-            return "LEFT"
+        def ternary_search():
+            def decide_side():
+                # Some heuristic to prefer order of eval
+                # of ternary search for general optimisation
+                return "LEFT"
 
-        def solve_side(lo, hi, mid):
-            # Checks if FVS exists for size=mid
-            # Updates the constraints based on the outcome
-            fvs = find_fvs(nodes, mid)
-            if fvs != None:
-                hi = mid - 1
-            else:
-                lo = mid + 1
-            return lo, hi, fvs
+            def solve_side(lo, hi, mid):
+                # Checks if FVS exists for size=mid
+                # Updates the constraints based on the outcome
+                fvs = find_fvs(nodes, mid)
+                if fvs != None:
+                    hi = mid - 1
+                else:
+                    lo = mid + 1
+                return lo, hi, fvs
+            # if not self.is_DAG(): return set()
+            nodes = self.graph.keys()
 
-        # if not self.is_DAG(): return set()
-        nodes = self.graph.keys()
+            lo, hi = 0, len(nodes) - 1
+            sol = None
 
-        lo, hi = 0, len(nodes) - 1
-        sol = None
+            while lo < hi:
+                mid1 = lo + (hi - lo) // 3
+                mid2 = hi - (hi - lo) // 3
 
-        while lo < hi:
-            mid1 = lo + (hi - lo) // 3
-            mid2 = hi - (hi - lo) // 3
-
-            if decide_side() == "LEFT":
-                lo, hi, fvs = solve_side(lo, hi, mid1)
-                if fvs == None:  # Solution doesn't exist
-                    lo, hi, fvs = solve_side(lo, hi, mid2)
-            else:
-                lo, hi, fvs = solve_side(lo, hi, mid2)
-                if fvs != None:  # Solution exists
-                    sol = fvs
+                if decide_side() == "LEFT":
                     lo, hi, fvs = solve_side(lo, hi, mid1)
+                    if fvs == None:  # Solution doesn't exist
+                        lo, hi, fvs = solve_side(lo, hi, mid2)
+                else:
+                    lo, hi, fvs = solve_side(lo, hi, mid2)
+                    if fvs != None:  # Solution exists
+                        sol = fvs
+                        lo, hi, fvs = solve_side(lo, hi, mid1)
 
-            if fvs != None:
-                sol = fvs
+                if fvs != None:
+                    sol = fvs
 
-        if lo == hi:
-            fvs = find_fvs(nodes, lo)
-            if fvs != None:
-                sol = fvs
-        return sol
+            if lo == hi:
+                fvs = find_fvs(nodes, lo)
+                if fvs != None:
+                    sol = fvs
+            return sol
+
+        def linear_search():
+            nodes = self.graph.keys()
+            fvs,sz = None, 0
+
+            while fvs is None:
+                fvs = find_fvs(nodes,sz)
+                sz += 1
+            return fvs
+                
+        if method == "linear":
+            return linear_search()
+        else:
+            return ternary_search()
 
     def get_FVS_Heuristic(self):
         critical_nodes = self.get_critical_nodes()
@@ -193,7 +207,7 @@ class Graph:
 
     # Heurisitic to determine the method to find FVS for self
     def decide_approach(self):
-        if self.N < 10 or self.M <= 3*self.N:
+        if self.N < 20:
             return "Exact"
         else:
             return "Heuristic"
@@ -223,7 +237,7 @@ class Graph:
                     
         if self.is_DAG(): return set()
 
-        pr = self.pagerank()
+        pr = self.pagerank(itr=1000)
         critical = None 
 
         for node in pr:
@@ -288,11 +302,10 @@ def read_graph():
             G.add_edge(u, v)
     return G
 
-def print_solution(G, sol, DEBG=True):
+def print_solution(G, sol, DEBG=False):
     if DEBG:
         print("Is FVS?", G.is_FVS(sol))
         print("Minimum nodes to remove = ", len(sol))
-        #print("Removed nodes = ", sol)
     else:
         print("\n".join(map(str, sol)))
 
@@ -301,4 +314,3 @@ if __name__ == "__main__":
     G = read_graph()
     sol = G.get_FVS()
     print_solution(G,sol)
-

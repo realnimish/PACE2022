@@ -217,16 +217,15 @@ def find_solution(G):
     scc = G.get_SCC()
     sol = set()
     for _set in scc:
-        if len(_set) < 3:
+        if len(_set) < 2:
             continue
         sol |= G.get_induced_subgraph(_set).get_FVS()
     return sol
 
 
-def print_solution(sol, DEBG=True):
+def print_solution(sol, DEBG=False):
     if DEBG:
         print("Minimum nodes to remove = ", len(sol))
-        print("Removed nodes = ", sol)
     else:
         print("\n".join(map(str, sol)))
 
@@ -234,4 +233,4 @@ def print_solution(sol, DEBG=True):
 if __name__ == "__main__":
     G = read_graph()
     sol = find_solution(G)
-    print_solution(sol, False)
+    print_solution(sol)
