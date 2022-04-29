@@ -251,15 +251,61 @@ class Graph:
         return fvs
 
     # Heuristic to find the set of nodes that should be removed
-    def get_critical_nodes(self):
-        """
-            Approach:
-            Select the highest weighted node based on Pagerank algorithm
-        """
+    def get_critical_nodes(self, method = "edge_density"):
+
+        def pagerank(beta=0.85, epsilon=1e-6, itr=100, rand=False):
+            """
+            beta - damping factor
+            itr - no. of iterations
+            epsilon - to check for convergence
+            rand - randomly initialize the probability of each node
+            Time Complexity - O(itr*(V + E)) (if there are no sink nodes in Graph)
+            """
+            N = len(self.graph)
+            curr = {}
+
+            # uniform probability distribution
+            if not rand:
+                curr = {node: 1 / N for node in self.graph}
+            else:
+                curr = {node: random() for node in self.graph}
+                sm = sum(curr.values())
+                curr = {k: v / sm for k, v in curr.items()}  # normalize the vector
+
+            for _ in range(itr):
+
+                # initialize the next distribution with (1-beta)/n to prevent spider trap
+                nxt = {node: (1 - beta) / N for node in self.graph}
+
+                for node in self.graph:
+                    for ch in self.graph[node]:
+                        nxt[ch] += beta * (curr[node] / len(self.graph[node]))
+
+                    # Distribute value of sink nodes among all other nodes
+                    if len(self.graph[node]) == 0:
+                        for x in self.graph:
+                            nxt[x] += beta * (curr[node] / N)
+                # if converge then return
+                if all(abs(curr[node] - nxt[node]) < epsilon for node in self.graph):
+                    return nxt
+                curr = nxt
+            return curr
+
+        def edge_density():
+            density = dict()
+
+            for node in self.graph:
+                _in,_out = self.node_degree(node)
+                density[node] = _in*_out
+            return density
                     
         if self.is_DAG(): return set()
 
-        pr = self.pagerank(itr=1000)
+        if method == "edge_density":
+            pr = edge_density()
+        else:
+            pr = pagerank()
+
         critical = None 
 
         for node in pr:
@@ -268,44 +314,6 @@ class Graph:
             elif pr[node] > pr[critical]:
                 critical = node 
         return {critical,}
-
-    def pagerank(self, beta=0.85, epsilon=1e-6, itr=100, rand=False):
-        """
-        beta - damping factor
-        itr - no. of iterations
-        epsilon - to check for convergence
-        rand - randomly initialize the probability of each node
-        Time Complexity - O(itr*(V + E)) (if there are no sink nodes in Graph)
-        """
-        N = len(self.graph)
-        curr = {}
-
-        # uniform probability distribution
-        if not rand:
-            curr = {node: 1 / N for node in self.graph}
-        else:
-            curr = {node: random() for node in self.graph}
-            sm = sum(curr.values())
-            curr = {k: v / sm for k, v in curr.items()}  # normalize the vector
-
-        for _ in range(itr):
-
-            # initialize the next distribution with (1-beta)/n to prevent spider trap
-            nxt = {node: (1 - beta) / N for node in self.graph}
-
-            for node in self.graph:
-                for ch in self.graph[node]:
-                    nxt[ch] += beta * (curr[node] / len(self.graph[node]))
-
-                # Distribute value of sink nodes among all other nodes
-                if len(self.graph[node]) == 0:
-                    for x in self.graph:
-                        nxt[x] += beta * (curr[node] / N)
-            # if converge then return
-            if all(abs(curr[node] - nxt[node]) < epsilon for node in self.graph):
-                return nxt
-            curr = nxt
-        return curr
 
 def read_graph():
     def read_data():    # Helper function to read the graph based on PACE input format
