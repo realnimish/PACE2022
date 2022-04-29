@@ -10,6 +10,7 @@ class Graph:
         self.graph = dict()
         self.N = N  # Number of Nodes
         self.M = M  # Number of Edges
+        self.indegree = dict()  # Number of incoming edges
 
     def get_all_nodes(self):
         nodes = set()
@@ -18,13 +19,23 @@ class Graph:
             nodes |= self.graph[node]
         return nodes
         
+    # Returns count of incoming,outgoing edges
+    def node_degree(self, node):
+        _in = self.indegree.get(node,0)
+        _out = len(self.graph.get(node,[]))
+        return _in, _out
+
     # Adds edge u -> v
     def add_edge(self, u, v):
         if u not in self.graph:
             self.graph[u] = set()
+            self.indegree[u] = 0
         if v not in self.graph:
             self.graph[v] = set()
+            self.indegree = 0
+
         self.graph[u].add(v)
+        self.indegree[v] += 1
 
     # @param nodes -> set(nodes)
     def remove_nodes(self, nodes):
@@ -33,6 +44,7 @@ class Graph:
             if nei is not None:
                 self.N -= 1
                 self.M -= len(nei)
+                self.indegree.pop(node)
 
         for node in self.graph:
             sz1 = len(self.graph[node])
@@ -50,6 +62,15 @@ class Graph:
                 break
             self.remove_nodes(sink_nodes)
 
+    def compute_indegree(self):
+        self.indegree = dict()
+
+        for node in self.graph:
+            if node not in self.indegree:
+                self.indegree[node] = 0
+            for nei in self.graph[node]:
+                self.indegree[nei] = 1 + self.indegree.get(nei,0)
+
     # @param nodes: set(nodes)
     # @returns G: Graph
     def get_induced_subgraph(self, nodes):
@@ -57,6 +78,7 @@ class Graph:
         for node in nodes:
             G.graph[node] = self.graph[node] & nodes
         G.M = sum(map(len, G.graph.values()))  # counts number of edges
+        G.compute_indegree()
         return G
 
     # Deepcopy the graph
@@ -64,6 +86,7 @@ class Graph:
         G = Graph(self.N, self.M)
         for node in self.graph:
             G.graph[node] = set(self.graph[node])
+            G.indegree[node] = self.indegree[node]
         return G
 
     def is_DAG(self):
@@ -90,7 +113,6 @@ class Graph:
 
     def get_transpose(self):
         G = Graph(self.N, self.M)
-        G.graph = {node:set() for node in self.get_all_nodes()}
 
         for node in self.graph:
             for ch in self.graph[node]:
