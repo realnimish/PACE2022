@@ -32,7 +32,7 @@ class Graph:
             self.indegree[u] = 0
         if v not in self.graph:
             self.graph[v] = set()
-            self.indegree = 0
+            self.indegree[v] = 0
 
         self.graph[u].add(v)
         self.indegree[v] += 1
@@ -117,6 +117,12 @@ class Graph:
         for node in self.graph:
             for ch in self.graph[node]:
                 G.add_edge(ch, node)
+
+        for node in self.get_all_nodes():
+            if node not in G.graph:
+                # Why is it reachable??
+                G.graph[node] = set()
+                G.indegree[node] = 0
         return G
 
     # @returns list of set where each set correspond to SCC
@@ -229,21 +235,25 @@ class Graph:
 
     # Heurisitic to determine the method to find FVS for self
     def decide_approach(self):
-        if self.N < 20:
-            return "Exact"
-        else:
-            return "Heuristic"
+        return "Heuristic"
 
     # Finds the FVS for the given graph
     def get_FVS(self):
         scc = self.get_SCC()
         fvs = set()
+        nexts = []
 
         for _set in scc:
             if len(_set) < 2: 
                 continue
 
             subgraph = self.get_induced_subgraph(_set)
+            nexts.append(subgraph)
+
+        del self.graph
+        del self.indegree
+        
+        for subgraph in nexts:
             if subgraph.decide_approach() == "Exact":
                 fvs |= subgraph.get_FVS_Exact()
             else:
@@ -296,7 +306,7 @@ class Graph:
 
             for node in self.graph:
                 _in,_out = self.node_degree(node)
-                density[node] = _in*_out
+                density[node] = _in + _out
             return density
                     
         if self.is_DAG(): return set()
