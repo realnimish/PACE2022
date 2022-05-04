@@ -2,8 +2,9 @@ from random import random
 from collections import defaultdict as ddict
 from itertools import combinations
 
-from sys import setrecursionlimit as srl 
-srl(10**7)
+import sys, threading
+sys.setrecursionlimit(1 << 30)
+threading.stack_size(1 << 27)
 
 class Graph:
     def __init__(self, N, M):
@@ -349,13 +350,18 @@ def read_graph():
 
 def print_solution(G, sol, DEBG=False):
     if DEBG:
-        print("Is FVS?", G.is_FVS(sol))
+        # print("Is FVS?", G.is_FVS(sol))
         print("Minimum nodes to remove = ", len(sol))
     else:
         print("\n".join(map(str, sol)))
 
-
-if __name__ == "__main__":
+def main():
     G = read_graph()
     sol = G.get_FVS()
     print_solution(G,sol)
+
+if __name__ == "__main__":
+    main_thread = threading.Thread(target=main)     # main -> function name {entry point}
+    main_thread.start()
+    main_thread.join()
+    
