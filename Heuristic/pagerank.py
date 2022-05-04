@@ -229,7 +229,14 @@ class Graph:
             return ternary_search()
 
     def get_FVS_Heuristic(self):
-        critical_nodes = self.get_critical_nodes()
+        if self.N < 10**4:
+            method = "pagerank"
+        else:
+            method = "edge_density"
+
+        count = max(1, self.N // 400)
+
+        critical_nodes = self.get_critical_nodes(method, count)
         self.remove_nodes(critical_nodes)
         return critical_nodes | self.get_FVS()
 
@@ -261,7 +268,7 @@ class Graph:
         return fvs
 
     # Heuristic to find the set of nodes that should be removed
-    def get_critical_nodes(self, method = "edge_density"):
+    def get_critical_nodes(self, method = "edge_density", count = 1):
 
         def pagerank(beta=0.85, epsilon=1e-6, itr=100, rand=False):
             """
@@ -312,18 +319,16 @@ class Graph:
         if self.is_DAG(): return set()
 
         if method == "edge_density":
-            pr = edge_density()
-        else:
-            pr = pagerank()
+            score = edge_density()
+        elif method == "pagerank":
+            score = pagerank()
 
-        critical = None 
+        critical = list(score.items())
+        critical.sort(key = lambda item: item[1], reverse = True) 
 
-        for node in pr:
-            if critical is None:
-                critical = node
-            elif pr[node] > pr[critical]:
-                critical = node 
-        return {critical,}
+        count = min(count, len(critical))
+        return {critical[i][0] for i in range(count)}
+
 
 def read_graph():
     def read_data():    # Helper function to read the graph based on PACE input format
