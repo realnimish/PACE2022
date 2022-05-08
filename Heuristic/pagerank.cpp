@@ -16,7 +16,7 @@ enum heuristic { Pagerank, Edge_Density };
 
 class Graph {
 public:
-    static int G_NODES, G_EDGES;
+    static int G_NODES, G_EDGES; // helps in determining which heuristic to apply
     int n, m;
     unordered_map<int, unordered_set<int>> graph;
     unordered_map<int, unordered_set<int>> transpose;
@@ -26,23 +26,30 @@ public:
     void add_edge(int u, int v) {
         graph[u].insert(v);
         transpose[v].insert(u);
+
         if(graph.find(v) == graph.end()) graph[v] = unordered_set<int>();
         if(transpose.find(u) == transpose.end()) transpose[u] = unordered_set<int>();
     }
 
     void remove_nodes(vector<int>& nodes) {
+        // remove u->v edges from transpose
+        // where v is in nodes
         for(int& par: nodes) {
             for(const int& ch: graph[par]) {
                 transpose[ch].erase(par);
             }
         }
 
+        // remove u->v edges from transpose
+        // where v is in nodes
         for(int& ch: nodes) {
             for(const int& par: transpose[ch]) {
                 m -= graph[par].erase(ch); // erase returns 1 if element is present
             }
         }
         
+        // remove u->v egdes from graph and transpose
+        // where u is in nodes
         for(int& node: nodes) {
             n -= 1;
             m -= graph[node].size();
@@ -51,13 +58,19 @@ public:
         }
     }
 
+    /**
+     * Takes intersefction of two unorderd sets and stores the result in graph[u]
+     * Complexity: O( min(|a|, |b|) )
+     */
     void compute_edges(int u, unordered_set<int>& a, unordered_set<int>& b, Graph* G) {
         if(a.size() > b.size()) {
+            // if b has less no. of elements than a
             for(const int& v: b) {
                 if(a.find(v) != a.end())
                     G->add_edge(u, v);
             }
-        }else {
+        } else {
+            // if a has less no. of elements than b 
             for(const int& v: a) {
                 if(b.find(v) != b.end())
                     G->add_edge(u, v);
@@ -65,6 +78,8 @@ public:
         }
     }
 
+    // Bottleneck if graph is very dense.
+    // Test case: 98, 99
     Graph* get_induced_subgraph(unordered_set<int>& nodes) {
         Graph* G = new Graph(nodes.size(), 0);        
         for(const int& u: nodes) {
@@ -97,14 +112,7 @@ public:
     //     return true;
     // }
 
-    // void get_transpose() {
-    //     for(auto& u: graph) {
-    //         for(int v: u.second) {
-    //             transpose[v].insert(u.first);
-    //         }
-    //     }
-    // }
-
+    /// Helps in calculating SCC of a graph
     void fill(int start, unordered_map<int, bool>& vis, stack<int>& st) {
         stack<int> q;
 
@@ -128,6 +136,7 @@ public:
         }
     }
 
+    /// Helps in calculating SCC of a graph
     unordered_set<int> dfs(int start, unordered_map<int, bool>& vis) {
         stack<int> q;
         unordered_set<int> comp;
@@ -181,7 +190,7 @@ public:
             method = Edge_Density;
             freq = 50;
         }
-        int count = max(1, n/freq);
+        int count = max(1, n/freq); // no. of critical nodes to remove from graph
         vector<int> cnodes = get_critical_nodes(method, count);
         remove_nodes(cnodes);
 
@@ -196,6 +205,15 @@ public:
         }
     }
 
+    /**
+     * Time Complexity - O(itr*(V + E)) (for SCC)
+     * @param count no. of critical nodes to return
+     * @param beta damping factor
+     * @param itr no. of iterations
+     * @param epsilon to check for convergence
+     * @param rand flag to randomly initialize the probability of each node
+     * @return a list of critical nodes
+     */
     vector<int> pagerank(int count=1, double beta=0.85, double epsilon=1e-6, int itr=100, bool rand=false) {
         unordered_map<int, double> curr, next;
         for(auto& u: graph) {
@@ -229,6 +247,9 @@ public:
             curr.swap(next);
             if(converge) break;
         }
+
+        // using min heap to get {count} no. of elements having largest density
+        // Complexity: O( n*log(k) ), n: no. of nodes in graph, k: count
         vector<int> cnodes;
         priority_queue<pair<double, int>, vector<pair<double, int>>, greater<pair<double, int>>> pq;
         for(auto& p: curr) {
@@ -242,12 +263,21 @@ public:
         return cnodes;
     }
 
+    /**
+     * @param count no. of critical nodes to return
+     * @return a list of critical nodes
+     */
     vector<int> edge_density(int count=1) {
+        // using min heap to get {count} no. of elements having largest density
+        // Complexity: O( n*log(k) ), n: no. of nodes in graph, k: count
+        // using <long long, int>, if in case density is changed to _incomingEdges * _outgoingEdges
         priority_queue<pair<long long, int>, vector<pair<long long, int>>, greater<pair<long long, int>>> pq;
+
         for(auto& u: graph) {
             pq.push({(long long)transpose[u.first].size() + u.second.size(), u.first});
             if(pq.size() > count) pq.pop();
         }
+
         vector<int> cnodes;
         while(!pq.empty()) {
             cnodes.push_back(pq.top().second);
@@ -263,6 +293,7 @@ void read(string& input) {
     } while(input.length() > 0 && input[0] == '%');
 }
 
+/// @return an object of the input graph
 Graph* read_graph() {
 	string input;
 	istringstream ss;
@@ -283,18 +314,23 @@ Graph* read_graph() {
     return G;
 }
 
+/**
+ * @param OG original graph
+ * @return FVS of the original graph
+ */
 vector<int> get_fvs(Graph* OG) {
-    stack<Graph*> st;
-    vector<int> fvs;
+    stack<Graph*> st; // to store objects of induced graphs
+    vector<int> fvs; // stores the FVS
 
     Graph* G = OG;
 
+    // get all the graphs induced by the SCCs of G 
     for(auto& _scc: G->get_scc()) {
         if(_scc.size() > 1) {
             st.push(G->get_induced_subgraph(_scc));
         }
     }
-    delete(G);
+    delete(G); // don't need this graph anymore
 
     // int x = 0;
     while(!st.empty()) {
@@ -302,12 +338,13 @@ vector<int> get_fvs(Graph* OG) {
         G = st.top(); st.pop();
         G->get_FVS_Heuristic(fvs);
 
+        // get all the graphs induced by the SCCs of G 
         for(auto& _scc: G->get_scc()) {
             if(_scc.size() > 1) {
                 st.push(G->get_induced_subgraph(_scc));
             }
         }
-        delete(G);
+        delete(G); // don't need this graph anymore
     }
     return fvs;
 }
