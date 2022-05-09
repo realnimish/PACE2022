@@ -31,6 +31,74 @@ public:
         if(transpose.find(u) == transpose.end()) transpose[u] = unordered_set<int>();
     }
 
+
+    /**
+     * Apply basic five reduction operations
+     * 1) IN0(v) - If indegree(v) = 0, remove v from graph
+     * 2) OUT0(v) - symmetric to IN0(v)
+     * 3) IN1(v) - If indegree(v) = 1 and u is the predecessor of v, collapse v into u.
+     * 4) OUT1(v) - symmetric to IN1(v)
+     * 5) LOOP(v) - if v->v is a self loop edge in graph, remove v
+     * 
+     * Note: 
+     * i) operation 3, 4 can introduced self loop, which will be removed by operation 5.
+     * ii) nodes removed by operation 5 will belong to MFVS.
+     */
+    void reduce_basic(vector<int>& fvs) {
+        int node;
+        int _in, _out;
+        bool nodesRemoved = true;
+        vector<int> cnodes; // stores nodes to be removed
+        unordered_set<int> removed; // stores nodes that has been removed
+        
+        while(nodesRemoved) {
+            nodesRemoved = false;
+
+            for(auto& u: graph) {
+                if(removed.find(u.first) != removed.end()) continue;
+                node = u.first;
+                _in = transpose[node].size();
+                _out = graph[node].size();
+
+                if(_in == 1) { // operation 3 IN1(v)
+                    int par = *(transpose[node].begin()); // only one parent of node
+                    for(const int& ch: graph[node]) { // merge node into its parent
+                        if(par == ch) { // self-loop is being introduced apply operation 5 LOOP(v)
+                            removed.insert(par);
+                            cnodes.push_back(par);
+                            fvs.push_back(par);
+                            break; // since this node will also be removed so no need to continue merging
+                        } else {
+                            graph[par].insert(ch);
+                            transpose[ch].insert(par);
+                        }
+                    }
+                } else if(_out == 1) { // operation 4 OUT1(v)
+                    int ch = *(graph[node].begin()); // only one child of node
+                    for(const int& par: transpose[node]) { // merge node into its child
+                        if(par == ch) { // self-loop is being introduced apply operation 5 LOOP(v)
+                            removed.insert(ch);
+                            cnodes.push_back(ch);
+                            fvs.push_back(ch);
+                            break; // since this node will also be removed so no need to continue merging
+                        } else {
+                            graph[par].insert(ch);
+                            transpose[ch].insert(par);
+                        }
+                    }
+                }
+
+                if(_in == 0 || _in == 1 || _out == 0 || _out == 1) {
+                    nodesRemoved = true;
+                    cnodes.push_back(node);
+                }
+            }
+            remove_nodes(cnodes);
+            cnodes.clear();
+            removed.clear();
+        }
+    }
+
     void remove_nodes(vector<int>& nodes) {
         // remove u->v edges from transpose
         // where v is in nodes
@@ -323,6 +391,10 @@ vector<int> get_fvs(Graph* OG) {
     vector<int> fvs; // stores the FVS
 
     Graph* G = OG;
+    
+    G->reduce_basic(fvs);
+    Graph::G_NODES = G->n; 
+    Graph::G_EDGES = G->m;
 
     // get all the graphs induced by the SCCs of G 
     for(auto& _scc: G->get_scc()) {
@@ -334,12 +406,19 @@ vector<int> get_fvs(Graph* OG) {
 
     // int x = 0;
     while(!st.empty()) {
-        // cerr << "fvs " << fvs.size() << " " << x++ << endl;
+        // cerr << "Before Reducing " << fvs.size() << " " << x << endl;
         G = st.top(); st.pop();
-        G->get_FVS_Heuristic(fvs);
+        G->reduce_basic(fvs);
+        vector<unordered_set<int>> scc = G->get_scc();
+        
+        // cerr << "After Reducing " << fvs.size() << " " << x++ << endl;
+        if(scc.size() == 1) {
+            G->get_FVS_Heuristic(fvs);
+            scc = G->get_scc();
+        }
 
         // get all the graphs induced by the SCCs of G 
-        for(auto& _scc: G->get_scc()) {
+        for(auto& _scc: scc) {
             if(_scc.size() > 1) {
                 st.push(G->get_induced_subgraph(_scc));
             }
@@ -357,12 +436,11 @@ int main() {
     cin.tie(0);
 
     Graph* G = read_graph();
-    Graph::G_NODES = G->n; 
-    Graph::G_EDGES = G->m;
     // cerr << "read input" << endl; 
     vector<int> fvs = get_fvs(G);
+    unordered_set<int> _fvs(fvs.begin(), fvs.end());
 
-    for(int& x: fvs) {
+    for(const int& x: _fvs) {
         cout << x << "\n";
     }
     // cerr << fvs.size() << "\n";
