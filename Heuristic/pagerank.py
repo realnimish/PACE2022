@@ -7,6 +7,8 @@ sys.setrecursionlimit(1 << 30)
 threading.stack_size(1 << 27)
 
 class Graph:
+    G_NODES = 0
+    G_EDGES = 0
     def __init__(self, N, M):
         self.graph = dict()
         self.N = N  # Number of Nodes
@@ -230,12 +232,24 @@ class Graph:
             return ternary_search()
 
     def get_FVS_Heuristic(self):
-        if self.N < 10**4:
+
+        if Graph.G_NODES < 10**4 and Graph.G_EDGES < 10**5:
             method = "pagerank"
+            freq = self.N
         else:
             method = "edge_density"
 
-        count = max(1, self.N // 400)
+        den = Graph.G_EDGES // Graph.G_NODES
+        if den >= 500:
+            freq = 20
+        elif den >= 100:
+            freq = 50
+        elif den >= 10:
+            freq = 100
+        else:
+            freq = 500
+
+        count = max(1, self.N // freq)
 
         critical_nodes = self.get_critical_nodes(method, count)
         self.remove_nodes(critical_nodes)
@@ -314,7 +328,7 @@ class Graph:
 
             for node in self.graph:
                 _in,_out = self.node_degree(node)
-                density[node] = _in + _out
+                density[node] = _in - _out
             return density
                     
         if self.is_DAG(): return set()
@@ -357,11 +371,17 @@ def print_solution(G, sol, DEBG=False):
 
 def main():
     G = read_graph()
+    Graph.G_NODES = G.N 
+    Graph.G_EDGES = G.M
     sol = G.get_FVS()
     print_solution(G,sol)
 
 if __name__ == "__main__":
     main_thread = threading.Thread(target=main)     # main -> function name {entry point}
     main_thread.start()
-    main_thread.join()
+    main_thread.join(10*60)
+    if main_thread.is_alive():
+        print("Time exceeded")
+        import os 
+        os._exit(1)
     
