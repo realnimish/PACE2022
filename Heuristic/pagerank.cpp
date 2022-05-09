@@ -55,7 +55,7 @@ public:
             nodesRemoved = false;
 
             for(auto& u: graph) {
-                if(removed.find(u.first) != removed.end()) continue;
+                if(removed.find(u.first) != removed.end()) continue; // if the node is already set to be removed then continue
                 node = u.first;
                 _in = transpose[node].size();
                 _out = graph[node].size();
@@ -64,12 +64,13 @@ public:
                     int par = *(transpose[node].begin()); // only one parent of node
                     for(const int& ch: graph[node]) { // merge node into its parent
                         if(par == ch) { // self-loop is being introduced apply operation 5 LOOP(v)
-                            removed.insert(par);
-                            cnodes.push_back(par);
-                            fvs.push_back(par);
-                            break; // since this node will also be removed so no need to continue merging
+                            if(removed.find(par) == removed.end()) {
+                                removed.insert(par);
+                                cnodes.push_back(par);                
+                                fvs.push_back(par);
+                            } break; // since this node will also be removed so no need to continue merging
                         } else {
-                            graph[par].insert(ch);
+                            m += graph[par].insert(ch).second;
                             transpose[ch].insert(par);
                         }
                     }
@@ -77,12 +78,13 @@ public:
                     int ch = *(graph[node].begin()); // only one child of node
                     for(const int& par: transpose[node]) { // merge node into its child
                         if(par == ch) { // self-loop is being introduced apply operation 5 LOOP(v)
-                            removed.insert(ch);
-                            cnodes.push_back(ch);
-                            fvs.push_back(ch);
-                            break; // since this node will also be removed so no need to continue merging
+                            if(removed.find(ch) == removed.end()) {
+                                removed.insert(ch);
+                                cnodes.push_back(ch);
+                                fvs.push_back(ch);
+                            } break; // since this node will also be removed so no need to continue merging
                         } else {
-                            graph[par].insert(ch);
+                            m += graph[par].insert(ch).second; // if new edge is added update m
                             transpose[ch].insert(par);
                         }
                     }
@@ -108,7 +110,7 @@ public:
             }
         }
 
-        // remove u->v edges from transpose
+        // remove u->v edges from graph
         // where v is in nodes
         for(int& ch: nodes) {
             for(const int& par: transpose[ch]) {
@@ -119,9 +121,8 @@ public:
         // remove u->v egdes from graph and transpose
         // where u is in nodes
         for(int& node: nodes) {
-            n -= 1;
-            m -= graph[node].size();
-            graph.erase(node);
+            m -= graph.count(node) ? graph[node].size() : 0;
+            n -= graph.erase(node);
             transpose.erase(node);
         }
     }
@@ -379,6 +380,7 @@ Graph* read_graph() {
 			G->add_edge(u, v);
 		} ss.clear();
 	}
+    G->n = G->graph.size();
     return G;
 }
 
@@ -438,9 +440,8 @@ int main() {
     Graph* G = read_graph();
     // cerr << "read input" << endl; 
     vector<int> fvs = get_fvs(G);
-    unordered_set<int> _fvs(fvs.begin(), fvs.end());
 
-    for(const int& x: _fvs) {
+    for(const int& x: fvs) {
         cout << x << "\n";
     }
     // cerr << fvs.size() << "\n";
