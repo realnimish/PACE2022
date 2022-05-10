@@ -128,7 +128,7 @@ public:
     }
 
     /**
-     * Takes intersefction of two unorderd sets and stores the result in graph[u]
+     * Takes intersection of two unorderd sets and stores the result in graph[u]
      * Complexity: O( min(|a|, |b|) )
      */
     void compute_edges(int u, unordered_set<int>& a, unordered_set<int>& b, Graph* G) {
