@@ -2,3 +2,5 @@
 */tests/*/h_*
 Local/
 .vscode
+*.exe
+*.o

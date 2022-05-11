@@ -101,10 +101,158 @@ public:
         }
     }
 
+    /**
+     * Evalutes PI graph and G-PI graph
+     * 
+     * Given an edge (u, v), (u, v) is a PI-edge if (v, u) also exists in G
+     * PI graph contains all PI edges
+     * G-PI graph will not contain any PI edges
+     */
+    void get_PI(Graph* PI, Graph* G_minus_PI) {
+        for(auto& u: graph) {
+            for(const int& v: u.second) { // for every (u, v)
+                if(graph[v].find(u.first) == graph[v].end()) { // if (v, u) does not exists
+                    G_minus_PI->add_edge(u.first, v); // then add it to G-PI 
+                } else { // if (v, u) exists
+                    PI->add_edge(u.first, v); // add it to PI
+                    PI->add_edge(v, u.first);
+                }
+            }
+        }
+    }
+
+    /**
+     * Remove acyclic edges from a graph
+     * 
+     * acyclic edges are edges that join one scc with another, since, those edges will never be part 
+     * of a cycle we can safely remove them
+     */
+    void remove_acyclic_edges(Graph* G) {
+        vector<unordered_set<int>> scc = G->get_scc(); 
+        for(auto& _scc: scc) {
+            for(const int& u: _scc) {
+                for(const int& v: G->graph[u]) {
+                    if(_scc.find(v) == _scc.end()) { // if (u, v) is not in _scc, remove it
+                        transpose[v].erase(u);
+                        graph[u].erase(v);
+                        m--;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply PI reduction
+     * remove all the acyclic edges present in G-PI graph
+     * 
+     * Note: 
+     * PI reduction does not remove any node from graph but since it remove edges, indegree and outdegree of nodes will decrease
+     * resulting in a graph which could be reduced using basic reduction techniques
+     * Complexity: O(E + V)
+     */
+    void reduce_pi(Graph* G_minus_PI) {
+        remove_acyclic_edges(G_minus_PI);
+    }
+
+    /**
+     * A vertex u is a PI vertex if all its incident edges are in PI graph
+     * @return array of all PI vertex, sorted in ascending order w.r.t. its degree
+     */
+    vector<int> get_PIV(Graph* PI) {
+        vector<int> PIV;
+        for(auto& u: PI->graph) {
+            if(PI->graph[u.first].size() == graph[u.first].size() && PI->transpose[u.first].size() == transpose[u.first].size()) {
+                PIV.push_back(u.first);
+            }
+        }
+        sort(PIV.begin(), PIV.end(), [&](const int& a, const int& b) {
+            return graph[a].size() < graph[b].size();
+        });
+        return PIV;
+    }
+
+    /**
+     * Apply Core reduction
+     * 
+     * a vertex u is a neighbour of v if edge (u, v) is in PI graph
+     * a vertex u COULD be a core vertex if u is in PIV and has minimum degree compare to all its neighbour N(u)
+     * a vertex u IS a core vertex if u and its neighbours N(u) forms a d-clique
+     * if a PI-vertex u with minimum degree n compared to its neighbours is not a core then each vertex in N(u) is not a core either
+     * 
+     * if u is a core vertex and then all vertex in N(u) will belong to MFVS and we can safely remove {u, N(u)} from graph
+     * Complexity: O( E + V*lg(V) )
+     */
+    void reduce_core(Graph* PI, vector<int>& fvs) {
+        vector<int> PIV = get_PIV(PI); // sorted in ascending order w.r.t. its degree
+        unordered_map<int, bool> valid; // represents if a vertex can be a core vertex or not
+        unordered_set<int> mfvs;
+        
+        for(int& x: PIV)
+            valid[x] = true;
+
+        for(auto& u: PIV) {
+            if(valid[u] == true) {
+                unordered_set<int> neighbour;
+                for(const int& v: PI->graph[u]) // finds its neighbours
+                    neighbour.insert(v);
+
+                bool is_d_clique = true;
+                for(const int& v: neighbour) { // check if {u, N(u)} forms a d-clique
+                    int vis = 0;
+                    for(const int& ch: PI->graph[v]) {
+                        if(neighbour.find(ch) != neighbour.end()) vis++;
+                    }
+                    if(vis != neighbour.size()-1) {
+                        is_d_clique = false;
+                        break;
+                    }
+                }
+                if(is_d_clique) {
+                    mfvs.insert(neighbour.begin(), neighbour.end());
+                    neighbour.insert(u);
+                    vector<int> cnodes(neighbour.begin(), neighbour.end());
+                    remove_nodes(cnodes);
+                }
+                for(const int& v: neighbour)
+                    valid[v] = false;
+            }
+        }
+        fvs.insert(fvs.end(), mfvs.begin(), mfvs.end());
+    }
+
+    /// Apply all reduction rules to a graph untill it cannot be reduced any further
+    void reduce(vector<int>& fvs) {
+        Graph *PI, *G_minus_PI;
+
+        while(true) {
+            reduce_basic(fvs);
+
+            PI = new Graph(0, 0);
+            G_minus_PI = new Graph(0, 0);
+            
+            int old_m = m;
+            get_PI(PI, G_minus_PI); // get PI and G-PI graph
+            reduce_pi(G_minus_PI); // try to reduce using PI reduction
+
+            if(m == old_m) { // if fail to reduce using PI reduction
+                int old_n = n;
+                reduce_core(PI, fvs); // apply Core reduction
+                if(n == old_n) break; // if fail to reduce using Core reduction then break out of loop
+            }
+
+            delete(PI);
+            delete(G_minus_PI);
+        }
+        delete(PI);
+        delete(G_minus_PI);
+    }
+
     void remove_nodes(vector<int>& nodes) {
         // remove u->v edges from transpose
         // where v is in nodes
         for(int& par: nodes) {
+            if(graph.count(par) == 0) continue;
             for(const int& ch: graph[par]) {
                 transpose[ch].erase(par);
             }
@@ -113,6 +261,7 @@ public:
         // remove u->v edges from graph
         // where v is in nodes
         for(int& ch: nodes) {
+            if(transpose.count(ch) == 0) continue;
             for(const int& par: transpose[ch]) {
                 m -= graph[par].erase(ch); // erase returns 1 if element is present
             }
@@ -343,7 +492,7 @@ public:
         priority_queue<pair<long long, int>, vector<pair<long long, int>>, greater<pair<long long, int>>> pq;
 
         for(auto& u: graph) {
-            pq.push({(long long)transpose[u.first].size() + u.second.size(), u.first});
+            pq.push({(long long)transpose[u.first].size() * u.second.size(), u.first});
             if(pq.size() > count) pq.pop();
         }
 
@@ -393,11 +542,6 @@ vector<int> get_fvs(Graph* OG) {
     vector<int> fvs; // stores the FVS
 
     Graph* G = OG;
-    
-    G->reduce_basic(fvs);
-    Graph::G_NODES = G->n; 
-    Graph::G_EDGES = G->m;
-
     // get all the graphs induced by the SCCs of G 
     for(auto& _scc: G->get_scc()) {
         if(_scc.size() > 1) {
@@ -406,21 +550,14 @@ vector<int> get_fvs(Graph* OG) {
     }
     delete(G); // don't need this graph anymore
 
-    // int x = 0;
     while(!st.empty()) {
-        // cerr << "Before Reducing " << fvs.size() << " " << x << endl;
         G = st.top(); st.pop();
-        G->reduce_basic(fvs);
-        vector<unordered_set<int>> scc = G->get_scc();
         
-        // cerr << "After Reducing " << fvs.size() << " " << x++ << endl;
-        if(scc.size() == 1) {
-            G->get_FVS_Heuristic(fvs);
-            scc = G->get_scc();
-        }
+        G->get_FVS_Heuristic(fvs);
+        G->reduce(fvs);
 
         // get all the graphs induced by the SCCs of G 
-        for(auto& _scc: scc) {
+        for(auto& _scc: G->get_scc()) {
             if(_scc.size() > 1) {
                 st.push(G->get_induced_subgraph(_scc));
             }
@@ -438,11 +575,18 @@ int main() {
     cin.tie(0);
 
     Graph* G = read_graph();
-    // cerr << "read input" << endl; 
-    vector<int> fvs = get_fvs(G);
+    vector<int> mfvs;
+    
+    G->reduce(mfvs);
+    Graph::G_NODES = G->n; 
+    Graph::G_EDGES = G->m;
+
+    // cerr << G->n << " " << G->m << " " << mfvs.size() << endl; 
+
+    vector<int> fvs = get_fvs(G); 
+    fvs.insert(fvs.end(), mfvs.begin(), mfvs.end());
 
     for(const int& x: fvs) {
         cout << x << "\n";
     }
-    // cerr << fvs.size() << "\n";
 }
