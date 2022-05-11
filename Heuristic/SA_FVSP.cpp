@@ -6,9 +6,9 @@
 #include <cstring>
 #include <unordered_set>
 #include <unordered_map>
+#include <algorithm>
 #include <cmath>
 #include <random>
-#include <algorithm>
 #include <functional>
 #include <assert.h>
 #include <signal.h>
@@ -123,7 +123,7 @@ public:
      * PI graph contains all PI edges
      * G-PI graph will not contain any PI edges
      */
-    void get_PI(Graph* PI, Graph* G_minus_PI) {
+    void get_PI(Graph* PI, Graph* G_minus_PI) { // Expensive Operation
         for(auto& u: graph) {
             for(const int& v: u.second) { // for every (u, v)
                 if(graph[v].find(u.first) == graph[v].end()) { // if (v, u) does not exists
@@ -240,27 +240,24 @@ public:
     void reduce(vector<int>& fvs) {
         Graph *PI, *G_minus_PI;
 
+        reduce_basic(fvs);
         while(true) {
-            reduce_basic(fvs);
-
             PI = new Graph(0, 0);
             G_minus_PI = new Graph(0, 0);
-            
-            int old_m = m;
+
+            int old_n = n;
+
             get_PI(PI, G_minus_PI); // get PI and G-PI graph
             reduce_pi(G_minus_PI); // try to reduce using PI reduction
+            reduce_core(PI, fvs); // apply Core reduction
 
-            if(m == old_m) { // if fail to reduce using PI reduction
-                int old_n = n;
-                reduce_core(PI, fvs); // apply Core reduction
-                if(n == old_n) break; // if fail to reduce using Core reduction then break out of loop
-            }
-
+            reduce_basic(fvs);
+            
             delete(PI);
             delete(G_minus_PI);
+
+            if(n == old_n) break; // if fail to reduce then break out of loop
         }
-        delete(PI);
-        delete(G_minus_PI);
     }
 
     void remove_nodes(vector<int>& nodes) {

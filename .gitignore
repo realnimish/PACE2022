@@ -4,3 +4,4 @@ Local/
 .vscode
 *.exe
 *.o
+output*
