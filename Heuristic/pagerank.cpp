@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
-#include <assert.h>
 
 using namespace std;
 
@@ -22,8 +21,9 @@ public:
     unordered_map<int, unordered_set<int>> transpose;
 
     Graph(int n, int m): n(n), m(m) {}
+    Graph(const Graph& G): n(G.n), m(G.m), graph(G.graph), transpose(G.transpose) {} // Copy Constructor
 
-    void add_edge(int u, int v) {
+    void add_edge(int u, int v) { // add edge (u, v) to graph
         graph[u].insert(v);
         transpose[v].insert(u);
 
@@ -31,6 +31,10 @@ public:
         if(transpose.find(u) == transpose.end()) transpose[u] = unordered_set<int>();
     }
 
+    void delete_edge(int u, int v) { // delete edge (u, v) from graph
+        graph[u].erase(v);
+        transpose[v].erase(u);
+    }
 
     /**
      * Apply basic five reduction operations
@@ -102,20 +106,54 @@ public:
     }
 
     /**
+     * Given an edge (u, v), (u, v) is a PI-edge if (v, u) also exists in G
+     * @return the no. of PI edges in graph
+     */
+    int get_pi_edges_count() {
+        int pi_edges = 0;
+        for(auto& u: graph) {
+            for(const int& v: u.second) { // for every (u, v)
+                if(graph[v].find(u.first) != graph[v].end()) { // if (v, u) exists
+                   pi_edges++;
+                }
+            }
+        }
+        return pi_edges;
+    }
+
+    /**
      * Evalutes PI graph and G-PI graph
      * 
      * Given an edge (u, v), (u, v) is a PI-edge if (v, u) also exists in G
      * PI graph contains all PI edges
      * G-PI graph will not contain any PI edges
      */
-    void get_PI(Graph* PI, Graph* G_minus_PI) { // Expensive Operation
-        for(auto& u: graph) {
-            for(const int& v: u.second) { // for every (u, v)
-                if(graph[v].find(u.first) == graph[v].end()) { // if (v, u) does not exists
-                    G_minus_PI->add_edge(u.first, v); // then add it to G-PI 
-                } else { // if (v, u) exists
-                    PI->add_edge(u.first, v); // add it to PI
-                    PI->add_edge(v, u.first);
+    void get_PI(Graph*& PI, Graph*& G_minus_PI) {
+        int pi_edges = get_pi_edges_count();
+
+        if(pi_edges && m / pi_edges <= 1) { // if condition holds then PI graph is almost similar to original graph
+            PI = new Graph(*this);
+            G_minus_PI = new Graph(0, 0);
+
+            for(auto& u: graph) {
+                for(const int& v: u.second) { // for every (u, v)
+                    if(graph[v].find(u.first) == graph[v].end()) { // if (v, u) does not exists
+                        G_minus_PI->add_edge(u.first, v); // add edge to G-PI
+                        PI->delete_edge(u.first, v); // delete edge from PI
+                    }
+                }
+            }
+        } else { // else G-PI graph is almost similar to original graph
+            PI = new Graph(0, 0);
+            G_minus_PI = new Graph(*this);
+
+            for(auto& u: graph) {
+                for(const int& v: u.second) { // for every (u, v)
+                    if(graph[v].find(u.first) != graph[v].end()) { // if (v, u) exists
+                        PI->add_edge(u.first, v); // add edge to PI
+                        PI->add_edge(v, u.first);
+                        G_minus_PI->delete_edge(u.first, v); // delete edge from G-PI
+                    }
                 }
             }
         }
@@ -221,15 +259,60 @@ public:
         fvs.insert(fvs.end(), mfvs.begin(), mfvs.end());
     }
 
-    /// Apply all reduction rules to a graph untill it cannot be reduced any further
+    /// checks if a set A is a subset of another set B 
+    bool is_subset(unordered_set<int>& a, unordered_set<int>& b) {
+        if(a.size() > b.size()) return false;
+
+        for(const int& x: a) {
+            if(b.find(x) == b.end()) 
+                return false;
+        }
+        return true;
+    }
+
+    /**
+     * Apply Dome Reduction
+     * 
+     * Dominant Edge are edges that are not part of minimal cycle and therefore, can be safely removed from graph
+     * 
+     * An edge (u, v) is a dominant edge if one of the following condition holds:-
+     * 1) Set of non-PI predecessor of u is a subset of all predecessor of v.
+     * 2) Set of non-PI successor of v is a subset of all successors of u.
+     * 
+     * Complexity: O(V * E)  !Very Expensive Reduction
+     */
+    void reduce_dome() {
+        Graph *PI, *G_minus_PI;
+
+        get_PI(PI, G_minus_PI);
+        
+        vector<pair<int, int>> dominant_edges;
+        for(auto& u: G_minus_PI->graph) {
+            for(const int& v: u.second) {
+                if(is_subset(G_minus_PI->transpose[u.first], transpose[v])) {
+                    dominant_edges.emplace_back(u.first, v);
+                } else if(is_subset(G_minus_PI->graph[v], graph[u.first])) {
+                    dominant_edges.emplace_back(u.first, v);
+                }
+            }
+        }
+
+        m -= dominant_edges.size();
+        for(auto& edge: dominant_edges) {
+            graph[edge.first].erase(edge.second);
+            transpose[edge.second].erase(edge.first);
+        }
+
+        delete(PI);
+        delete(G_minus_PI);
+    }
+
+    /// Apply all reduction rules to a graph except Dome until it cannot be reduced any further
     void reduce(vector<int>& fvs) {
         Graph *PI, *G_minus_PI;
 
         reduce_basic(fvs);
         while(true) {
-            PI = new Graph(0, 0);
-            G_minus_PI = new Graph(0, 0);
-
             int old_n = n;
 
             get_PI(PI, G_minus_PI); // get PI and G-PI graph
@@ -242,6 +325,16 @@ public:
             delete(G_minus_PI);
 
             if(n == old_n) break; // if fail to reduce then break out of loop
+        }
+    }
+
+    /// Apply all reduction rules to a graph including Dome until it cannot be reduced any further
+    void reduce_special(vector<int>& fvs) {
+        while(true) {
+            int old_n = n;
+            reduce_dome(); // Apply Dome reduction 
+            reduce(fvs); // Apply all other reductions
+            if(n == old_n) break;
         }
     }
     
@@ -271,6 +364,18 @@ public:
             n -= graph.erase(node);
             transpose.erase(node);
         }
+        
+        // re-hash graph and transpose if nescessary
+        if(graph.size() && graph.bucket_count() / graph.size() >= 2) {
+            graph.rehash(graph.size());
+            transpose.rehash(transpose.size());
+            for(auto& u: graph) {
+                if(graph[u.first].size() && graph[u.first].bucket_count() / graph[u.first].size() >= 2)
+                    graph[u.first].rehash(graph[u.first].size());
+                if(transpose[u.first].size() && transpose[u.first].bucket_count() / transpose[u.first].size() >= 2)
+                    transpose[u.first].rehash(transpose[u.first].size());
+            }
+        }
     }
 
     /**
@@ -293,13 +398,26 @@ public:
         }
     }
 
-    // Bottleneck if graph is very dense.
-    // Test case: 98, 99
+    /// @return induced sub-graph containing vertices in {nodes} 
     Graph* get_induced_subgraph(unordered_set<int>& nodes) {
-        Graph* G = new Graph(nodes.size(), 0);        
-        for(const int& u: nodes) {
-            compute_edges(u, graph[u], nodes, G);
-            G->m += G->graph[u].size();
+        Graph* G; // induced sub-graph
+        
+        if(graph.size()/nodes.size() <= 2) { // induced sub-graph is almost similar to original graph
+            G = new Graph(*this);
+
+            vector<int> remove;
+            for(auto& u: G->graph) {
+                if(nodes.find(u.first) == nodes.end()) {
+                    remove.push_back(u.first);
+                }
+            }
+            G->remove_nodes(remove);
+        } else {
+            G = new Graph(nodes.size(), 0);        
+            for(const int& u: nodes) {
+                compute_edges(u, graph[u], nodes, G);
+                G->m += G->graph[u].size();
+            }
         }
         return G;
     }
@@ -393,6 +511,43 @@ public:
             }
         }
         return scc;
+    }
+
+    // helps in finding topological ordering of a graph
+    void topo_helper(int start, unordered_map<int, bool>& vis, vector<int>& topo_order) {
+        stack<int> q;
+
+        q.push(start);
+        while(!q.empty()) {
+            int u = q.top();
+            vis[u] = true;
+            bool finished = true;
+
+            for(const int& v: transpose[u]) {
+                if(!vis[v]) {
+                    q.push(v);
+                    finished = false;
+                    break;
+                }
+            }
+            if(finished) {
+                topo_order.push_back(u);
+                q.pop();
+            }
+        }
+    }
+
+    vector<int> get_topological_ordering() {
+        vector<int> topo_order;
+        unordered_map<int, bool> vis;
+
+        for(auto& u: graph) {
+            if(!vis[u.first]) {
+                topo_helper(u.first, vis, topo_order);
+            }
+        }
+
+        return topo_order;
     }
 
    void get_FVS_Heuristic(vector<int>& fvs) {
@@ -545,13 +700,14 @@ vector<int> get_fvs(Graph* OG) {
             st.push(G->get_induced_subgraph(_scc));
         }
     }
-    delete(G); // don't need this graph anymore
 
     while(!st.empty()) {
         G = st.top(); st.pop();
         
         G->get_FVS_Heuristic(fvs);
-        G->reduce_basic(fvs);
+
+        if(G->m <= 1e6) G->reduce(fvs);
+        else G->reduce_basic(fvs);
 
         // get all the graphs induced by the SCCs of G 
         for(auto& _scc: G->get_scc()) {
@@ -559,6 +715,9 @@ vector<int> get_fvs(Graph* OG) {
                 st.push(G->get_induced_subgraph(_scc));
             }
         }
+
+        // cerr << "fvs size: " << fvs.size() << endl;
+
         delete(G); // don't need this graph anymore
     }
     return fvs;
@@ -572,18 +731,23 @@ int main() {
     cin.tie(0);
 
     Graph* G = read_graph();
+    // cerr << "read graph" << endl;
     vector<int> mfvs;
     
     G->reduce(mfvs);
     Graph::G_NODES = G->n; 
     Graph::G_EDGES = G->m;
 
-    // cerr << G->n << " " << G->m << " " << mfvs.size() << endl; 
+    if(G->m < 1e6) G->reduce_special(mfvs); // if graph is small apply expensive reduction
 
-    vector<int> fvs = get_fvs(G); 
-    fvs.insert(fvs.end(), mfvs.begin(), mfvs.end());
+    // cerr << G->n << " " << G->m << " " << mfvs.size() << endl;
 
-    for(const int& x: fvs) {
+    vector<int> fvs = get_fvs(G);
+
+    for(const int& x: fvs)
         cout << x << "\n";
-    }
+    for(const int& x: mfvs)
+        cout << x << "\n";
+    
+    // cerr << "Ans: " << fvs.size() + mfvs.size() << endl;
 }
