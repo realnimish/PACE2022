@@ -723,6 +723,84 @@ vector<int> get_fvs(Graph* OG) {
     return fvs;
 }
 
+/**
+ * Time Complexity: O( V + E )
+ * Space Complexity: O( batch_size * V )
+ *  @return set of redundant nodes in fvs set
+ */
+unordered_set<int> get_redunant(Graph* OG, vector<int>& fvs) {
+    unordered_set<int> redundant;
+    Graph* G = new Graph(*OG); // acyclic sub-graph of original
+    G->remove_nodes(fvs);
+    vector<int> ordering = G->get_topological_ordering(); // topological ordering of acyclic graph
+
+    int batch_size = 1000; // process {batch_size} no. of nodes at one go
+    int iterations = (fvs.size() + batch_size - 1) / batch_size;
+
+    for(int i=0; i<iterations; i++) {
+        unordered_map<int, unordered_set<int>> vis; // vis[u] stores the set of nodes in fvs that can reach u
+
+        int cnt = batch_size;
+        for(int j=i*batch_size; j<fvs.size() && cnt; j++, cnt--) {
+            int u = fvs[j];
+            for(const int& v: OG->graph[u]) {
+                if(G->graph.find(v) != G->graph.end())
+                    vis[v].insert(u);
+            }
+        }
+
+        // if a node u is reachable from a node x in fvs
+        // then successor of u are also reachable from x
+        for(int& u: ordering) {
+            for(const int& v: G->transpose[u]) {
+                vis[u].insert(vis[v].begin(), vis[v].end());
+            }
+        }
+
+        cnt = batch_size;
+        for(int j=i*batch_size; j<fvs.size() && cnt; j++, cnt--) {
+            int u = fvs[j];
+            bool is_redundant = true;
+            // if a node in fvs is reachable from itself then its not redundant
+            for(const int& v: OG->transpose[u]) {
+                if(G->graph.find(v) != G->graph.end() && vis[v].find(u) != vis[v].end()) {
+                    is_redundant = false;
+                    break;
+                }
+            }
+            if(is_redundant) redundant.insert(u);
+        }
+    }
+
+    // if all nodes in fvs are redundant randomly remove one node from redundant set
+    if(!redundant.empty() && redundant.size() == fvs.size()) redundant.erase(redundant.begin());
+    return redundant;
+}
+
+/// removes redundant nodes from fvs
+vector<int> remove_redundant(Graph* OG, vector<int>& fvs) {
+    bool flag = 1;
+    vector<int> final_fvs; // fvs after removal of redundant nodes
+
+    while(flag) {
+        unordered_set<int> redundant = get_redunant(OG, fvs);
+
+        for(int x: fvs) { // if x is not redundant push it to final_fvs
+            if(redundant.find(x) == redundant.end())
+                final_fvs.push_back(x);
+        }
+
+        if(!redundant.empty()) {
+            OG->remove_nodes(final_fvs); // remove nodes from original that are not redundant
+            fvs = get_fvs(OG); // re-calculate fvs
+            if(fvs.empty()) flag = 0;
+        } else {
+            flag = 0;
+        }
+    }
+    return final_fvs;
+}
+
 int Graph::G_NODES = 0;
 int Graph::G_EDGES = 0;
 
@@ -743,6 +821,7 @@ int main() {
     // cerr << G->n << " " << G->m << " " << mfvs.size() << endl;
 
     vector<int> fvs = get_fvs(G);
+    fvs = remove_redundant(G, fvs);
 
     for(const int& x: fvs)
         cout << x << "\n";
