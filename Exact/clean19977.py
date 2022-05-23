@@ -565,28 +565,33 @@ def GetFVS(G):
 
 
 # %%
-G = nx.DiGraph()
+def read_graph():
+    def read_data():    # Helper function to read the graph based on PACE input format
+        is_comment = lambda x: len(x) > 0 and x[0] == "%"
+        inp = "%"
+        while is_comment(inp):
+            inp = input()
+        return map(int, inp.split())
 
-G.add_edges_from(
-    [
-        (1, 2),
-        (1, 4),
-        (2, 3),
-        (2, 5),
-        (3, 8),
-        (4, 5),
-        (5, 1),
-        (5, 3),
-        (6, 5),
-        (7, 5),
-        (7, 8),
-        (8, 6),
-        (8, 1),
-        (6, 9),
-        (9, 8),
-        (8, 4),
-        (3, 4),
-    ]
-)
+    n, m, _ = read_data()
+    # G = Graph(n, m)
+    G = nx.DiGraph()
+    edges = []
+    for u in range(1, n + 1):
+        nei = read_data()
+        for v in nei:
+            edges.append((u,v))
+    G.add_edges_from(edges)
+    return G
 
-print(GetFVS(G))
+def print_solution(G, sol, DEBG=False):
+    if DEBG:
+        # print("Is FVS?", G.is_FVS(sol))
+        print("Minimum nodes to remove = ", len(sol))
+    else:
+        print("\n".join(map(str, sol)))
+
+if __name__ == "__main__":
+    G = read_graph()
+    fvs = GetFVS(G)
+    print_solution(G,fvs)
