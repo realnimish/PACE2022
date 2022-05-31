@@ -3,6 +3,7 @@
 #include <vector>
 #include <stack>
 #include <queue>
+#include <bitset>
 #include <cstring>
 #include <unordered_set>
 #include <unordered_map>
@@ -354,7 +355,10 @@ public:
 	void reduce_special(vector<int>& fvs) {
 		while(true) {
 			int old_n = n;
+			int old_m = m;
 			reduce_dome(); // Apply Dome reduction 
+			if(m == old_m) break;
+			
 			reduce(fvs); // Apply all other reductions
 			if(n == old_n) break;
 		}
@@ -702,11 +706,11 @@ unordered_set<int> get_redunant(Graph* OG, vector<int>& fvs) {
 	G->remove_nodes(fvs);
 	vector<int> ordering = G->get_topological_ordering(); // topological ordering of acyclic graph
 
-	int batch_size = 7500; // process {batch_size} no. of nodes at one go
+	const int batch_size = 7500; // process {batch_size} no. of nodes at one go
 	int iterations = (fvs.size() + batch_size - 1) / batch_size;
 
 	for(int i=0; i<iterations && !tle; i++) {
-		unordered_map<int, unordered_set<int>> vis; // vis[u] stores the set of nodes in fvs that can reach u
+		unordered_map<int, bitset<batch_size>> vis; // vis[u] stores the set of nodes in fvs that can reach u
 		vis.reserve(G->graph.size());
 
 		int cnt = batch_size;
@@ -715,7 +719,7 @@ unordered_set<int> get_redunant(Graph* OG, vector<int>& fvs) {
 			if(tle) return {};
 			for(const int& v: OG->graph[u]) {
 				if(G->graph.find(v) != G->graph.end())
-					vis[v].insert(u);
+					vis[v][cnt-1] = 1;
 			}
 		}
 
@@ -724,7 +728,7 @@ unordered_set<int> get_redunant(Graph* OG, vector<int>& fvs) {
 		for(int& u: ordering) {
 			if(tle) return {};
 			for(const int& v: G->transpose[u]) {
-				vis[u].insert(vis[v].begin(), vis[v].end());
+                vis[u] |= vis[v];
 			}
 		}
 
@@ -735,7 +739,7 @@ unordered_set<int> get_redunant(Graph* OG, vector<int>& fvs) {
 			if(tle) return {};
 			// if a node in fvs is reachable from itself then its not redundant
 			for(const int& v: OG->transpose[u]) {
-				if(G->graph.find(v) != G->graph.end() && vis[v].find(u) != vis[v].end()) {
+				if(G->graph.find(v) != G->graph.end() && vis[v][cnt-1] == 1) {
 					is_redundant = false;
 					break;
 				}
@@ -808,13 +812,13 @@ vector<int> type_1(Graph* G, int orig_edges) {
 	vector<int> curr_fvs;
 	curr_fvs = get_fvs(G, freq);
 
-	 if(G->n > 2000) {
+	if(G->n > 2000) {
 		max_iter = 20;
 	}
 	if(G->m > 25000) {
 		if(((graph_nodes_sz-curr_fvs.size())/curr_fvs.size()) < 1) {
 			max_iter = 100;
-		} else max_iter = 10;
+		} else max_iter = 20;
 	}
 
 	vector<int> best_add = curr_fvs;
@@ -824,13 +828,11 @@ vector<int> type_1(Graph* G, int orig_edges) {
 	gl_curr = 123459876;
 	gl_mod_val = 2147483648;
 	
-	// cerr << "G->n: " << G->n << "\tInitial FVS: " << curr_fvs.size() << endl;
-	
+	// cerr << "G->n: " << G->n << "\tInitial FVS: " << curr_fvs.size() << "\n";
+	// cerr << "freq : "  << freq << "\tmax_iter: " << max_iter << "\n";
 	int old_sz = curr_fvs.size();
 	while(start_add && !tle)
 	{
-		vector<int> best_fvs = best_add;
-		int best_fvs_size = best_add_size;
 		curr_fvs = best_add;
 
 		for(int iter=1; iter<=max_iter && !tle; ++iter)
@@ -843,12 +845,9 @@ vector<int> type_1(Graph* G, int orig_edges) {
 
 			int cnt = 0;
 
-			while(cnt < num_nodes_add)
-			{
+			while(cnt < num_nodes_add) {
 				int nd = graph_nodes[random_val()%graph_nodes_sz];
-
-				if(new_fvs.insert(nd).second)
-				{ 
+				if(new_fvs.insert(nd).second) { 
 				  curr_fvs.push_back(nd);
 				  cnt++;
 				}
@@ -860,24 +859,16 @@ vector<int> type_1(Graph* G, int orig_edges) {
 
 			// cerr << "adding nodes: " << num_nodes_add << "\tFVS size: " << curr_fvs.size() + mfvs.size() << "\tBest: " << best_add_size + mfvs.size() << "\tstart_add: " << start_add << endl;
 
-			if((curr_fvs.size() < best_fvs_size) && !tle)
-			{
-				best_fvs_size = curr_fvs.size();
-				best_fvs = curr_fvs;
+			if((curr_fvs.size() < best_add_size) && !tle) {
+				best_add_size = curr_fvs.size();
+				best_add = curr_fvs;
 			}
-		}
-
-		if(best_fvs.size() < best_add_size)
-		{
-			best_add_size = best_fvs.size();
-			best_add = best_fvs;
 		}
 		// cerr << "BEST FVS: " << best_add_size + mfvs.size() << " " << start_add << endl;
 
 		start_add++;
-		if(start_add > 20) start_add = 2;
+		if(start_add > 10) start_add = 2;
 	}
-
 	return best_add;
 }
 
@@ -933,8 +924,6 @@ vector<int> improve_fvs(Graph* G, int orig_edges) {
 	// cerr << "Initial FVS: " << curr_fvs.size() << "\n";
 
 	while(start_add && !tle) {
-		vector<int> best_fvs = best_add;
-		int best_fvs_size = best_add_size;
 		int cnt_iter = 0;
 
 		for(int iter=1; iter<=max_iter && !tle; ++iter) {
@@ -968,9 +957,9 @@ vector<int> improve_fvs(Graph* G, int orig_edges) {
 
 			bool iter_flag = 0;
 
-			if((curr_fvs.size() < best_fvs_size) && !tle) {
-				best_fvs_size = curr_fvs.size();
-				best_fvs = curr_fvs;
+			if((curr_fvs.size() < best_add_size) && !tle) {
+				best_add_size = curr_fvs.size();
+				best_add = curr_fvs;
 				iter_flag = 1;
 			}
 
@@ -981,11 +970,6 @@ vector<int> improve_fvs(Graph* G, int orig_edges) {
 			} else {
 				cnt_iter = 0;
 			}
-		}
-
-		if(best_fvs.size() < best_add_size) {
-			best_add_size = best_fvs.size();
-			best_add = best_fvs;
 		}
 		// cerr << "BEST FVS: " << best_add_size << " " << start_add << "\n";
 		
